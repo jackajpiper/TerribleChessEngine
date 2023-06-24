@@ -41,7 +41,7 @@ function indexToRankFile(index) {
 }
 
 function rankFileToIndex(rank, file) {
-  return (rank * 8) + file;
+  return ((rank-1) * 8) + file - 1;
 }
 
 function getValidMoves(c) {
@@ -133,8 +133,8 @@ function populateBoard() {
 
 function addClickSelect() {
   canvas.addEventListener('click', function(e) {
-    var rank = Math.floor(e.clientY / cellSize);
-    var file = Math.floor(e.clientX / cellSize);
+    var rank = Math.ceil(e.clientY / cellSize);
+    var file = Math.ceil(e.clientX / cellSize);
     selectedPiece = BOARD[rankFileToIndex(rank, file)];
     drawBoard();
     populateBoard();
@@ -160,24 +160,16 @@ addClickSelect();
 
 // FUNCTIONS TO GET MOVES FOR EACH PEICE
 function getPawnMoves(rank, file, isWhite) {
-  var moves = [];
   var rankDirection = isWhite ? 1 : -1;
-  var hasMoved = rank !== (isWhite ? 2 : 7);
-  if (!hasMoved) {
-    moves.push({ rank: rank + (2*rankDirection), file: file });
+  var move = { rank: rank + rankDirection, file: file };
+  if (!moveIsBlocked(move)) {
+    var moves = [];
+    var hasMoved = rank !== (isWhite ? 2 : 7);
+    moves.push(move);
+    if (!hasMoved) {
+      moves.push({ rank: rank + (2*rankDirection), file: file });
+    }
   }
-  moves.push({ rank: rank + rankDirection, file: file });
-  return moves;
-}
-
-function getRookMoves(rank, file, isWhite) {
-  var moves = [];
-
-  for(var i=0; i <= 8; i++) {
-    moves.push({ rank: rank, file: i });
-    moves.push({ rank: i, file: file });
-  }
-  moves.filter((move) => move.rank === file && move.file === move.file);
   return moves;
 }
 
@@ -195,26 +187,73 @@ function getKnightMoves(rank, file, isWhite) {
   moves = moves.filter((move) => move.rank >= 1
                       && move.rank <= 8
                       && move.file >= 1
-                      && move.file <= 8);
+                      && move.file <= 8
+                      && !moveIsBlocked(move));
 
+  return moves;
+}
+
+function getRookMoves(rank, file, isWhite) {
+  var moves = [];
+  var expandXUp = true;
+  var expandXDown = true;
+  var expandYUp = true;
+  var expandYDown = true;
+
+  var i = 1;
+  while (expandXUp || expandXDown || expandYUp || expandYDown) {
+    expandXUp = rank - 1 >= 1 && !moveIsBlocked({ rank: rank - 1, file: file });
+    expandXDown = rank + 1 <= 8 && !moveIsBlocked({ rank: rank + 1, file: file });
+    expandYUp = file - 1 >= 1 && !moveIsBlocked({ rank: rank, file: file - 1 });
+    expandYDown = file + 1 <= 8 && !moveIsBlocked({ rank: rank, file: file + 1 });
+    
+    if (expandXUp) {
+      moves.push({ rank: rank - 1, file: i });
+    }
+    if (expandXDown) {
+      moves.push({ rank: rank + 1, file: i });
+    }
+    if (expandYUp) {
+      moves.push({ rank: rank, file: i - 1 });
+    }
+    if (expandYDown) {
+      moves.push({ rank: rank, file: i + 1 });
+    }
+
+    i++;
+  }
   return moves;
 }
 
 function getBishopMoves(rank, file, isWhite) {
   var moves = [];
-  // var distanceFromEdge = Math.min(rank)
+  var expandXUp = true;
+  var expandXDown = true;
+  var expandYUp = true;
+  var expandYDown = true;
 
-  for(var i=1; i <= 7; i++) {
-    moves.push({ rank: rank+i, file: file+i });
-    moves.push({ rank: rank+i, file: file-i });
-    moves.push({ rank: rank-i, file: file+i });
-    moves.push({ rank: rank-i, file: file-i });
+  var i = 1;
+  while (expandXUp || expandXDown || expandYUp || expandYDown) {
+    expandXUp = rank - 1 >= 1 && file - 1 >= 1 && !moveIsBlocked({ rank: rank - 1, file: file - 1 });
+    expandXDown = rank + 1 <= 8 && file - 1 >= 1 && !moveIsBlocked({ rank: rank + 1, file: file - 1 });
+    expandYUp = rank - 1 >= 1 && file + 1 >= 1 && !moveIsBlocked({ rank: rank - 1, file: file + 1 });
+    expandYDown = rank + 1 <= 8 && file + 1 >= 1 && !moveIsBlocked({ rank: rank + 1, file: file + 1 });
+    
+    if (expandXUp) {
+      moves.push({ rank: rank - 1, file: file - 1 });
+    }
+    if (expandXDown) {
+      moves.push({ rank: rank + 1, file: file - 1 });
+    }
+    if (expandYUp) {
+      moves.push({ rank: rank - 1, file: file + 1 });
+    }
+    if (expandYDown) {
+      moves.push({ rank: rank + 1, file: file + 1 });
+    }
+
+    i++;
   }
-
-  moves.filter((move) => move.rank >= 1
-                      && move.rank <= 8
-                      && move.file >= 1
-                      && move.file <= 8);
   return moves;
 }
 
@@ -229,9 +268,14 @@ function getKingMoves(rank, file, isWhite) {
   moves.push({ rank: rank, file: file+1 });
   moves.push({ rank: rank, file: file-1 });
 
-  moves.filter((move) => move.rank >= 1
+  moves = moves.filter((move) => move.rank >= 1
                       && move.rank <= 8
                       && move.file >= 1
-                      && move.file <= 8);
+                      && move.file <= 8
+                      && !moveIsBlocked(move));
   return moves;
+}
+
+function moveIsBlocked(move) {
+  return !!BOARD[rankFileToIndex(move.rank, move.file)]?.type;
 }
