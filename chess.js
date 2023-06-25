@@ -9,14 +9,17 @@ canvas.height = boardSize; canvas.width = boardSize;
 var initialOrder = ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"];
 
 var BOARD = [];
+var whitePieces = [];
+var blackPieces = [];
 var selectedPiece = null;
+var iAmWhite = true;
 
 // value of each piece
 var V = {
   "king": 10,
   "queen": 9,
   "rook": 5,
-  "bishop": 4, // THIS IS WRONG, SHOULD BE 3
+  "bishop": 3,
   "knight": 3,
   "pawn": 1
 }
@@ -59,11 +62,15 @@ function getValidMoves(c) {
 function setupInitialBoard() {
   // add white non-pawns
   initialOrder.forEach((piece, index) => {
-    BOARD.push(new C(1, index+1, piece, true));
+    var piece = new C(1, index+1, piece, true);
+    whitePieces.push(piece);
+    BOARD.push(piece);
   });
   // add white pawns
   for(var file = 1; file <= 8; file++) {
-    BOARD.push(new C(2, file, "pawn", true));
+    var piece = new C(2, file, "pawn", true);
+    whitePieces.push(piece);
+    BOARD.push(piece);
   }
   // add middle ranks
   for (var rank = 3; rank <= 6; rank++) {
@@ -73,11 +80,15 @@ function setupInitialBoard() {
   }
   // add black pawns
   for(var file = 1; file <= 8; file++) {
-    BOARD.push(new C(7, file, "pawn", false));
+    var piece = new C(7, file, "pawn", false);
+    blackPieces.push(piece);
+    BOARD.push(piece);
   }
   // add black non-pawns
   initialOrder.forEach((piece, index) => {
-    BOARD.push(new C(8, index+1, piece, true));
+    var piece = new C(8, index+1, piece, false);
+    blackPieces.push(piece);
+    BOARD.push(piece);
   });
 }
 
@@ -117,7 +128,7 @@ function populateBoard() {
         (cell.rank * cellSize - cellSize), cellSize, cellSize);
     }
 
-    if (selectedPiece.rank == cell.rank && selectedPiece.file == cell.file) {
+    if (selectedPiece?.rank == cell.rank && selectedPiece?.file == cell.file) {
       context.fillStyle = "#9999aa";
       context.fillRect(
         (cell.file * cellSize - cellSize),
@@ -131,7 +142,7 @@ function populateBoard() {
   });
 }
 
-function addClickSelect() {
+function addClickEvent() {
   canvas.addEventListener('click', function(e) {
     var rank = Math.ceil(e.clientY / cellSize);
     var file = Math.ceil(e.clientX / cellSize);
@@ -141,13 +152,90 @@ function addClickSelect() {
   }, false);
 }
 
+var threatenedPieces = [] // TODO: get pieces that are threatened by an enemy piece
+function getNextMove(isWhite) {
+  var move = null;
+  var bestScore = null;
+  var bestPiece = null;
+  var pieces = isWhite ? whitePieces : blackPieces;
+  pieces.forEach((piece) => {
+    var result = evaluatePiece(piece);
+    if (!bestScore || bestScore < result.score) {
+      bestScore = result.score;
+      move = result.move;
+      bestPiece = result.piece;
+    }
+  })
+  return { piece: bestPiece, move: move }; 
+}
+
+function evaluatePiece(piece) {
+  var moves = getValidMoves(piece);
+  var bestMove = null;
+  var bestScore = null;
+  moves.forEach((move) => {
+    var score = evaluateMove(move, piece);
+    if (!bestScore || bestScore < score) {
+      bestScore = score;
+      bestMove = move;
+    }
+  })
+  return { move: bestMove, score: bestScore, piece: piece };
+}
+
+function evaluateMove(move, piece) {
+  var score = 0;
+  var pieceValue = V[piece.type];
+  var targetCell = BOARD[rankFileToIndex(move.rank, move.file)];
+  var isThreatenedBefore = false // TODO: is currently threatened by an enemy piece
+  var threateningPiece = null;
+  var isAttacking = targetCell.type && targetCell.isWhite != iAmWhite;
+  var isThreatenedAfter = false // TODO: will be threatened after move
+
+  if (isThreatenedAfter && isAttacking) { // it's a trade
+    var tradeValue = V[targetCell.type] - pieceValue;
+    score = tradeValue;
+  } else if (isAttacking) { // it's a free capture
+    score = V[threateningPiece.type] - pieceValue;
+  } else if (isThreatenedAfter) { // it's a terrible idea
+    score = pieceValue * -1;
+  } else if (isThreatenedBefore) { // it's escaping danger
+    var getGuardingPiece = null; // TODO: get piece that is guarding this one
+    if (getGuardingPiece) { // it's a potential trade
+      var tradeValue = V[getGuardingPiece.type];
+      score = tradeValue;
+    } else { // it's unguarded and must flee
+      score = pieceValue;
+    }
+  }
+
+  var movingToProtect = threatenedPieces.filter((p) => {
+    return p.rank == move.rank && p.file == move.file;
+  })[0];
+  if (movingToProtect) { // it's moving to protect another piece
+    score = V[movingToProtect.type];
+  }
+
+  if (!isThreatenedBefore && !isAttacking) { // it's just moving for the sake of it
+    // trying to occupy space near the centre of the board
+    if ((move.rank == 4 || move.rank == 5) && (move.file == 4 || move.file == 5)) {
+      score += 0.75;
+    } else if ((move.rank > 2 || move.rank < 7) && (move.file > 2 || move.file < 7)) {
+      score += 0.5;
+    } else if ((move.rank > 1 || move.rank < 8) && (move.file > 1 || move.file < 8)) {
+      score += 0.25
+    }
+  }
+
+  return score;
+}
 
 setupInitialBoard();
 drawBoard();
 // set selected piece
-selectedPiece = BOARD[55];
+// selectedPiece = BOARD[55];
 populateBoard();
-addClickSelect();
+addClickEvent();
 
 
 
